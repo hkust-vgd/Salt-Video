@@ -17,6 +17,8 @@ An annotation tool for marine data labeling.
 we use multi-thread to generate the onnx models. If your computer is less powerful, you can set ```--nthread``` to a smaller valuer (default is 8).
 
 ## Labeling demo
+https://github.com/hkust-vgd/Salt-Video/assets/18065488/372aac02-cc46-4475-8c7e-f69475728ee0
+
 
 
 ## Usage
