@@ -45,6 +45,8 @@ class Propogator:
         self.config=config
         self.max_step=config.max_step
         self.video_config=video_config
+        self.img_w = config.img_w
+        self.img_h = config.img_h
         self.palette = Image.open("./salt/mask_palette.png").getpalette()
         self.mapper = MaskMapper()
         self.network=network
@@ -59,20 +61,6 @@ class Propogator:
         del self.mapper
         del self.processor
         torch.cuda.empty_cache()
-        # video_config = vars(self.config)
-        # video_config['enable_long_term'] = not video_config['disable_long_term']
-        # video_config['enable_long_term_count_usage'] = (
-        #         video_config['enable_long_term'] and
-        #         (100
-        #          / (video_config['max_mid_term_frames'] - video_config['min_mid_term_frames'])
-        #          * video_config['num_prototypes'])
-        #         >= video_config['max_long_term_elements']
-        # )
-        # self.video_config=video_config
-        #
-        # network = XMem(self.video_config, "./saves/XMem.pth").cuda().eval()
-        # model_weights = torch.load("./saves/XMem.pth")
-        # network.load_weights(model_weights, init_as_zero_if_needed=True)
         self.processor = InferenceCore(self.network, config=self.video_config)
         self.mapper=MaskMapper()
 
@@ -81,7 +69,6 @@ class Propogator:
             img = Image.open(img_path).convert('RGB')
             img = self.im_transform(img)
             rgb = img.cuda()
-            # Run the model on this frame
             prob = self.processor.step(rgb, self.msk, self.labels, end=False)
             out_mask = torch.argmax(prob, dim=0)
             out_mask = (out_mask.detach().cpu().numpy()).astype(np.uint8)
@@ -90,26 +77,16 @@ class Propogator:
             os.makedirs(this_out_path, exist_ok=True)
             out_mask = self.mapper.remap_index_mask(out_mask)
             out_img = Image.fromarray(out_mask)
-            out_img = out_img.resize((1280, 720), Image.NEAREST)
-            # out_img = out_img.resize((1290, 730), Image.NEAREST)
-            # out_img = out_img.resize((640, 480), Image.NEAREST)
-            # out_img = out_img.resize((3840, 2160), Image.NEAREST)
-            # if self.palette is not None:
-                # out_img.putpalette(self.palette)
+            out_img = out_img.resize((self.img_w, self.img_h), Image.NEAREST)
             out_img.putpalette(self.palette)
-            # out_img.save(os.path.join(this_out_path, str(image_id).zfill(5) + '.png'))
             out_img_data=np.array(out_img)
             out_img_data[out_img_data > 0] = 1
-            # fortran_ground_truth_binary_mask = np.asfortranarray(out_img_data)
-            # compressed_rle = mask_util.encode(fortran_ground_truth_binary_mask)
-            # compressed_rle['counts'] = str(compressed_rle['counts'], encoding="utf-8")
             return out_img_data
 
     def get_mask_label(self,step):
         if step == 1:
             mask = np.array(Image.open("./salt/mask.png").convert('P'), dtype=np.uint8)
             self.msk = mask
-            # print("reinitialize mask")
         else:
             self.msk = None
 
@@ -119,22 +96,19 @@ class Propogator:
             else:
                 # no point to do anything without a mask
                 pass
-        # Map possibly non-continuous labels to continuous ones
         if self.msk is not None:
-            # print(self.first_mask_loaded)
             self.msk, self.labels = self.mapper.convert_mask(self.msk)
             self.msk = torch.Tensor(self.msk).cuda()
             self.msk = resize_mask(self.msk.unsqueeze(0), args.size)[0]
             self.processor.set_all_labels(list(self.mapper.remappings.values()))
-            # print("reinitialize labels")
         else:
             self.labels = None
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task-path", type=str, default="/data/labeling_tool/debug_data/video_data")
-    parser.add_argument("--categories", type=str,default="massive,encrusting,branching,foliaceous,columnar,laminar,free,soft,sponge")
+    parser.add_argument("--dataset-path", type=str, default="./video_seqs/shark")
+    parser.add_argument("--categories", type=str,default="foreground")
     parser.add_argument('--disable_long_term', action='store_true')
     parser.add_argument('--max_mid_term_frames', help='T_max in paper, decrease to save memory', type=int, default=10)
     parser.add_argument('--min_mid_term_frames', help='T_min in paper, decrease to save memory', type=int, default=5)
@@ -143,6 +117,8 @@ if __name__ == "__main__":
                         type=int, default=10000)
     parser.add_argument('--num_prototypes', help='P in paper', type=int, default=128)
     parser.add_argument('--top_k', type=int, default=30)
+    parser.add_argument('--img_w', type=int, default=1280)
+    parser.add_argument('--img_h', type=int, default=720)
     parser.add_argument('--mem_every', help='r in paper. Increase to improve running speed.', type=int, default=5)
     parser.add_argument('--deep_update_every', help='Leave -1 normally to synchronize with mem_every', type=int,
                         default=-1)
@@ -156,20 +132,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    task_path = args.task_path
-    dataset_path = os.path.join(task_path)
-    onnx_models_path = os.path.join(task_path, "models")
-
+    dataset_path = args.dataset_path
+    onnx_models_path = os.path.join(dataset_path, "models")
 
     categories = None
     if args.categories is not None:
         categories = args.categories.split(",")
     
-    coco_json_path = os.path.join(task_path,"annotations.json")
+    coco_json_path = os.path.join(dataset_path,"annotations.json")
 
     editor = Editor(
         onnx_models_path,
         dataset_path,
+        img_size = [args.img_w,args.img_h],
         categories=categories,
         coco_json_path=coco_json_path
     )

@@ -12,14 +12,6 @@ from PIL import Image
 
 def init_coco(dataset_folder, image_names, categories, coco_json_path):
     coco_json = {
-        "info": {
-            "description": "SAM Dataset",
-            "url": "",
-            "version": "1.0",
-            "year": 2023,
-            "contributor": "Sam",
-            "date_created": "2021/07/01",
-        },
         "images": [],
         "annotations": [],
         "categories": [],
@@ -98,7 +90,7 @@ def parse_mask_to_coco(image_id, anno_id, image_mask, category_id, poly=False):
 
 
 class DatasetExplorer:
-    def __init__(self, dataset_folder, categories=None, coco_json_path=None):
+    def __init__(self, dataset_folder, img_size=[1280,720], categories=None, coco_json_path=None):
         self.dataset_folder = dataset_folder
         self.image_names = sorted(os.listdir(os.path.join(self.dataset_folder, "images")))
         self.image_names = [
@@ -111,7 +103,8 @@ class DatasetExplorer:
             self.__init_coco_json(categories)
         with open(coco_json_path, "r") as f:
             self.coco_json = json.load(f)
-
+        self.img_w = img_size[0]
+        self.img_h = img_size[1]
         self.categories = [
             category["name"] for category in self.coco_json["categories"]
         ]
@@ -235,10 +228,8 @@ class DatasetExplorer:
             json.dump(self.coco_json, f)
 
     def save_buffer_mask(self,image_id):
-        merged_mask = np.zeros([720, 1280])
-        # merged_mask = np.zeros([730, 1290])
-        # merged_mask = np.zeros([640, 480])
-        # merged_mask = np.zeros([2160, 3840])
+        merged_mask = np.zeros([self.img_h, self.img_w])
+
         masks=[]
         for ann in self.coco_json["annotations"]:
             if ann['image_id']==image_id:
@@ -246,10 +237,7 @@ class DatasetExplorer:
         for rle in masks:
             merged_mask += coco_mask.decode(rle)
         merged_mask[merged_mask > 0] = 1
-        final_mask = np.zeros([720, 1280, 3])
-        # final_mask = np.zeros([730, 1290, 3])
-        # final_mask = np.zeros([640, 480, 3])
-        # final_mask = np.zeros([2160, 3840, 3])
+        final_mask = np.zeros([self.img_h, self.img_w, 3])
         final_mask[merged_mask == 1] = [255, 0, 0]
         mask_img = Image.fromarray(np.uint8(final_mask), "RGB").convert("P")
         mask_img.save("./salt/mask.png")

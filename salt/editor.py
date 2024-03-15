@@ -36,7 +36,7 @@ class CurrentCapturedInputs:
 
 class Editor:
     def __init__(
-        self, onnx_models_path, dataset_path, categories=None, coco_json_path=None
+        self, onnx_models_path, dataset_path, img_size=[1280,720],categories=None, coco_json_path=None
     ):
         self.dataset_path = dataset_path
         self.coco_json_path = coco_json_path
@@ -45,7 +45,7 @@ class Editor:
         if self.coco_json_path is None:
             self.coco_json_path = os.path.join(self.dataset_path, "annotations.json")
         self.dataset_explorer = DatasetExplorer(
-            self.dataset_path, categories=categories, coco_json_path=self.coco_json_path
+            self.dataset_path,img_size=img_size, categories=categories, coco_json_path=self.coco_json_path
         )
         self.curr_inputs = CurrentCapturedInputs()
         self.categories, self.category_colors = self.dataset_explorer.get_categories(
